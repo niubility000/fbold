@@ -1,19 +1,47 @@
 <template>
   <div
     id="previewer"
-    @mousemove="toggleNavigation"
-    @touchstart="toggleNavigation"
+    @mousemove="toggleNavigation(); mouseMove();"
+    @touchstart="toggleNavigation(); touchStart();"
+    @touchmove="touchMove"
+    
   >
-    <header-bar>
+    <header-bar  v-if="this.showNav">
       <action icon="close" :label="$t('buttons.close')" @action="close()" />
       <title>{{ name }}</title>
       <action
         :disabled="loading"
         v-if="isResizeEnabled && req.type === 'image'"
-        :icon="fullSize ? 'photo_size_select_large' : 'hd'"
+        :icon="fullSize ? 'photo_size_select_actual' : 'hd'"
+	:label="fullSize ? 'Original Photo' : 'HD'"
         @action="toggleSize"
       />
 
+      <action
+        :disabled="loading"
+        v-if="req.type == 'audio'||req.type == 'video'"
+        :icon="loopS ? 'repeat_one' : 'rotate_90_degrees_ccw'"
+	:label="loopS ? 'Loop' : 'No Loop'"
+        @action="loopSwitch"
+      />
+
+      <action
+        :disabled="loading"
+        v-if="req.type == 'image'"
+        :icon="fullScreen ? 'fullscreen_exit' : 'zoom_out_map'"
+	:label="fullScreen ? 'fullscreen Exit' : 'FullScreen'"
+        @action="screen"
+      />
+
+      <action
+        :disabled="loading"
+        v-if="req.type == 'image'"
+        icon="rotate_right"
+	label="Rotate"
+        @action="setRotate"
+      />
+
+   
       <template #actions>
         <action
           :disabled="loading"
@@ -55,20 +83,22 @@
     </div>
     <template v-else>
       <div class="preview">
-        <ExtendedImage v-if="req.type == 'image'" :src="raw"></ExtendedImage>
+        <ExtendedImage v-if="req.type == 'image'" :src="raw" ref="container" :angle="angle"></ExtendedImage>
         <audio
           v-else-if="req.type == 'audio'"
-          ref="player"
+          ref="audioPlayer"
           :src="raw"
-          controls
           :autoplay="autoPlay"
           @play="autoPlay = true"
+	  controls="controls" 
+	  :loop="loopS"
         ></audio>
         <video
           v-else-if="req.type == 'video'"
-          ref="player"
+          ref="videoPlayer"
           :src="raw"
-          controls
+          controls="controls" 
+	  :loop="loopS"
           :autoplay="autoPlay"
           @play="autoPlay = true"
         >
@@ -142,6 +172,7 @@
 
 <script>
 import { mapState } from "vuex";
+
 import { files as api } from "@/api";
 import { baseURL, resizePreview } from "@/utils/constants";
 import url from "@/utils/url";
@@ -151,7 +182,7 @@ import HeaderBar from "@/components/header/HeaderBar";
 import Action from "@/components/header/Action";
 import ExtendedImage from "@/components/files/ExtendedImage";
 
-const mediaTypes = ["image", "video", "audio", "blob"];
+const mediaTypes = ["image", "video", "audio"];
 
 export default {
   name: "preview",
@@ -162,6 +193,9 @@ export default {
   },
   data: function () {
     return {
+      lastX: null,
+      touches: 0,
+      navThreshold: 50,
       previousLink: "",
       nextLink: "",
       listing: null,
@@ -172,6 +206,13 @@ export default {
       navTimeout: null,
       hoverNav: false,
       autoPlay: false,
+      fullScreen: false,
+      loopS: false,
+    //  moveX:0,
+      angle: 0,
+      prevType: "",
+      nextType: "",
+      goType: "",
     };
   },
   computed: {
@@ -210,7 +251,7 @@ export default {
   },
   watch: {
     $route: function () {
-      this.updatePreview();
+      this.initFullScreen();
       this.toggleNavigation();
     },
   },
@@ -223,6 +264,96 @@ export default {
     window.removeEventListener("keydown", this.key);
   },
   methods: {
+    screen() {
+          let element = document.documentElement;
+          // let element = document.getElementById("Eimage");
+          if (this.fullScreen) {
+             if (document.exitFullscreen) {
+                 document.exitFullscreen();
+
+             } else if (document.webkitCancelFullScreen) {
+                document.webkitCancelFullScreen();
+             } else if (document.mozCancelFullScreen) {
+                document.mozCancelFullScreen();
+
+             } else if (document.msExitFullscreen) {
+                document.msExitFullscreen();
+             }
+          } else {
+               if (element.requestFullscreen) {
+                    element.requestFullscreen();
+               } else if (element.webkitRequestFullScreen) {
+                    element.webkitRequestFullScreen();
+               } else if (element.mozRequestFullScreen) {
+                    element.mozRequestFullScreen();
+               } else if (element.msRequestFullscreen) {
+                   // IE11
+                    element.msRequestFullscreen();
+               }
+
+          }
+
+          this.fullScreen = !this.fullScreen;
+
+    },
+
+    loopSwitch() {
+      if ( this.loopS === true) {
+          this.loopS = false; 
+	//  alert(this.loopS);
+      } else {
+          this.loopS = true;
+	//  alert(this.loopS); 
+      }
+   
+   },
+
+    mouseMove(event) {
+  //  this.moveX = this.$refs.container.navX;
+  //  alert(this.$refs.container.navX);
+      this.checkNav(this.$refs.container.navX);
+      event.preventDefault();
+    },
+
+    touchStart(event) {      
+      this.lastX = null;
+      event.preventDefault();
+    },
+    
+    checkNav(x) {
+ //   alert(x)
+      if((this.req.type === "image" && this.$refs.container.scale === this.$refs.container.oScale)||this.req.type !== "image") {
+
+         if (x > this.navThreshold && this.hasPrevious) this.prev();
+	         else if (x < -this.navThreshold && this.hasNext) this.next();
+         
+		  }
+		   
+
+    },
+ 
+    touchMove(event) {
+      event.preventDefault();
+      if (this.lastX === null) {
+        this.lastX = event.targetTouches[0].pageX;
+        return;
+      }
+      if (event.targetTouches.length > 1) {
+          return;
+      } else if (event.targetTouches.length === 1) {
+        let x = event.targetTouches[0].pageX - this.lastX;
+    //    this.lastX = event.targetTouches[0].pageX;
+        this.checkNav(x);
+      }
+    },  
+  
+  
+  
+  
+  
+  
+  
+  
     deleteFile() {
       this.$store.commit("showHover", {
         prompt: "delete",
@@ -241,11 +372,13 @@ export default {
     },
     prev() {
       this.hoverNav = false;
-      this.$router.push({ path: this.previousLink });
+      this.goType = this.prevType;
+      this.$router.replace({ path: this.previousLink });
     },
     next() {
       this.hoverNav = false;
-      this.$router.push({ path: this.nextLink });
+      this.goType = this.nextType;
+      this.$router.replace({ path: this.nextLink });
     },
     key(event) {
       if (this.show !== null) {
@@ -263,15 +396,15 @@ export default {
         this.close();
       }
     },
+    initFullScreen() {
+        if (this.fullScreen === true && this.goType !== "image") {
+            this.screen();
+        }
+	this.updatePreview();
+    },
     async updatePreview() {
-      if (
-        this.$refs.player &&
-        this.$refs.player.paused &&
-        !this.$refs.player.ended
-      ) {
-        this.autoPlay = false;
-      }
-
+      this.autoPlay = false;
+      this.angle = 0;
       if (this.req.subtitles) {
         this.subtitles = this.req.subtitles.map(
           (sub) => `${baseURL}/api/raw${sub}?inline=true`
@@ -294,6 +427,8 @@ export default {
       this.previousLink = "";
       this.nextLink = "";
 
+
+   if(mediaTypes.includes(this.req.type)){
       for (let i = 0; i < this.listing.length; i++) {
         if (this.listing[i].name !== this.name) {
           continue;
@@ -302,6 +437,7 @@ export default {
         for (let j = i - 1; j >= 0; j--) {
           if (mediaTypes.includes(this.listing[j].type)) {
             this.previousLink = this.listing[j].url;
+	    this.prevType = this.listing[j].type;
             break;
           }
         }
@@ -309,12 +445,14 @@ export default {
         for (let j = i + 1; j < this.listing.length; j++) {
           if (mediaTypes.includes(this.listing[j].type)) {
             this.nextLink = this.listing[j].url;
+	    this.nextType = this.listing[j].type;
             break;
           }
         }
 
         return;
       }
+   }
     },
     openMore() {
       this.$store.commit("showHover", "more");
@@ -322,6 +460,13 @@ export default {
     resetPrompts() {
       this.$store.commit("closeHovers");
     },
+
+    setRotate() {
+        this.angle += 90
+
+    },
+
+
     toggleSize() {
       this.fullSize = !this.fullSize;
     },
@@ -339,9 +484,7 @@ export default {
     }, 500),
     close() {
       this.$store.commit("updateRequest", {});
-
-      let uri = url.removeLastDir(this.$route.path) + "/";
-      this.$router.push({ path: uri });
+      history.back();
     },
     download() {
       api.download(null, this.$route.path);
