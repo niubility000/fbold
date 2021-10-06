@@ -54,11 +54,26 @@
 }
 
 #listing .item img {
+
   width: 4em;
   height: 4em;
-  object-fit: cover;
+  object-fit: none;
+ /* box-shadow: 3px 3px 3px rgba(0,0,0,.5);*/
   margin-right: 0.1em;
   vertical-align: bottom;
+  border-radius:5px;
+
+
+
+/*   width: 6em;
+  height: 6em;
+  object-fit: none;
+  margin-right: 0.1em;
+  vertical-align: bottom;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 5px;
+  width: 350px;  */
 }
 
 .message {
@@ -100,6 +115,7 @@
 
 #listing.mosaic .item div:first-of-type {
   width: 5em;
+ /* width: 10em;*/
 }
 
 #listing.mosaic .item div:last-of-type {
