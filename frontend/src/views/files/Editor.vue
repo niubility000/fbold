@@ -132,9 +132,14 @@ export default {
     },
     close() {
       this.$store.commit("updateRequest", {});
-
-      let uri = url.removeLastDir(this.$route.path) + "/";
-      this.$router.push({ path: uri });
+ 
+      var r=confirm("Do you wanna save?")
+      if (r==true) {
+         this.save();
+         history.back();
+      } else {
+         history.back();
+      }
     },
   },
 };
