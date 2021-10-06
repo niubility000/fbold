@@ -72,7 +72,8 @@ export default {
       if (this.type === "image") return "insert_photo";
       if (this.type === "audio") return "volume_up";
       if (this.type === "video") return "movie";
-      return "insert_drive_file";
+      if (this.type === "text" || this.type === "textImmutable" ) return "import_contacts";
+      return "call_to_action";
     },
     isDraggable() {
       return this.readOnly == undefined && this.user.perm.rename;
